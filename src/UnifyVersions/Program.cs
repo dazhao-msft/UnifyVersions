@@ -18,7 +18,7 @@ namespace UnifyVersions
 
             string rootDirectory = args[0];
 
-            string[] files = Directory.GetFiles(rootDirectory, "*.csproj", SearchOption.AllDirectories);
+            string[] projectFiles = Directory.GetFiles(rootDirectory, "*.csproj", SearchOption.AllDirectories);
 
             //
             // Collects package info.
@@ -26,9 +26,9 @@ namespace UnifyVersions
 
             List<Package> packages = new List<Package>();
 
-            foreach (string file in files)
+            foreach (string projectFile in projectFiles)
             {
-                var document = XDocument.Parse(File.ReadAllText(file));
+                var document = XDocument.Parse(File.ReadAllText(projectFile));
 
                 var packageReferenceList = new List<XElement>();
                 packageReferenceList.AddRange(document.Root.Elements("ItemGroup").SelectMany(p => p.Elements("PackageReference")));
@@ -42,7 +42,7 @@ namespace UnifyVersions
 
                     if (string.IsNullOrEmpty(include) || string.IsNullOrEmpty(version))
                     {
-                        Console.WriteLine($"Invalid package reference: {packageReference.ToString()}");
+                        Console.WriteLine($"Warning: invalid package reference: {packageReference.ToString()}");
                         continue;
                     }
 
@@ -55,14 +55,15 @@ namespace UnifyVersions
                 }
             }
 
-            var uniquePackages = packages.Distinct(PackageComparer.Default).ToList();
-            uniquePackages.Sort(PackageComparer.Default);
+            var packageComparer = new PackageComparer();
+
+            var uniquePackages = packages.Distinct(packageComparer).OrderBy(p => p, packageComparer).ToList();
 
             //
             // Rewrites project files with version properties.
             //
 
-            foreach (string file in files)
+            foreach (string file in projectFiles)
             {
                 var document = XDocument.Parse(File.ReadAllText(file));
 
@@ -78,7 +79,7 @@ namespace UnifyVersions
 
                     if (string.IsNullOrEmpty(include) || attribute == null)
                     {
-                        Console.WriteLine($"Invalid package reference: {packageReference.ToString()}");
+                        Console.WriteLine($"Warning: invalid package reference: {packageReference.ToString()}");
                         continue;
                     }
 
@@ -116,8 +117,6 @@ namespace UnifyVersions
 
         private class PackageComparer : IComparer<Package>, IEqualityComparer<Package>
         {
-            public static readonly PackageComparer Default = new PackageComparer();
-
             public int Compare(Package x, Package y)
             {
                 int result = 0;
