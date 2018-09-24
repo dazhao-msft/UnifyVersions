@@ -10,21 +10,41 @@ namespace UnifyVersions
     {
         public static void Main(string[] args)
         {
-            if (args == null || args.Length < 1 || !Directory.Exists(args[0]))
+            if (args == null || args.Length != 2)
             {
-                Console.WriteLine("Root directory is expected.");
+                Console.WriteLine("Expected arguments: {path to root directory} {path to PackageVersions.props");
                 return;
             }
 
             string rootDirectory = args[0];
+            if (!Directory.Exists(rootDirectory))
+            {
+                Console.WriteLine("Root directory doesn't exist");
+            }
+
+            string pkgPropsFile = args[1];
+            if (!File.Exists(pkgPropsFile) ||
+                !StringComparer.OrdinalIgnoreCase.Equals("PackageVersions.props", Path.GetFileName(pkgPropsFile)))
+            {
+                Console.WriteLine("PackageVersions.props is not found.");
+            }
 
             string[] projectFiles = Directory.GetFiles(rootDirectory, "*.csproj", SearchOption.AllDirectories);
 
-            //
-            // Collects package info.
-            //
+            HashSet<Package> packages = GetAllPackages(projectFiles);
 
-            List<Package> packages = new List<Package>();
+            RewriteProjectFiles(projectFiles);
+
+            PrintPackagePropertiesToCopy(packages);
+
+            Console.WriteLine("Completed.");
+
+            Console.Read();
+        }
+
+        private static HashSet<Package> GetAllPackages(IEnumerable<string> projectFiles)
+        {
+            var packages = new HashSet<Package>(new PackageComparer());
 
             foreach (string projectFile in projectFiles)
             {
@@ -46,26 +66,18 @@ namespace UnifyVersions
                         continue;
                     }
 
-                    if (StringComparer.OrdinalIgnoreCase.Equals(version, GetReferencedPackageVersionProperty(include)))
-                    {
-                        continue;
-                    }
-
-                    packages.Add(new Package() { Id = include, Version = version });
+                    packages.Add(new Package(include, version));
                 }
             }
 
-            var packageComparer = new PackageComparer();
+            return packages;
+        }
 
-            var uniquePackages = packages.Distinct(packageComparer).OrderBy(p => p, packageComparer).ToList();
-
-            //
-            // Rewrites project files with version properties.
-            //
-
-            foreach (string file in projectFiles)
+        private static void RewriteProjectFiles(IEnumerable<string> projectFiles)
+        {
+            foreach (string projectFile in projectFiles)
             {
-                var document = XDocument.Parse(File.ReadAllText(file));
+                var document = XDocument.Parse(File.ReadAllText(projectFile));
 
                 var packageReferenceList = new List<XElement>();
                 packageReferenceList.AddRange(document.Root.Elements("ItemGroup").SelectMany(p => p.Elements("PackageReference")));
@@ -77,42 +89,58 @@ namespace UnifyVersions
 
                     var attribute = packageReference.Attribute("Version") ?? packageReference.Attribute("version");
 
-                    if (string.IsNullOrEmpty(include) || attribute == null)
+                    if (string.IsNullOrEmpty(include) || string.IsNullOrEmpty(attribute?.Value))
                     {
                         Console.WriteLine($"Warning: invalid package reference: {packageReference.ToString()}");
                         continue;
                     }
 
-                    attribute.Value = GetReferencedPackageVersionProperty(include);
+                    var package = new Package(include, /* version doesn't matter here */ string.Empty);
+
+                    attribute.Value = package.MSBuildReferencedPackageVersionProperty;
                 }
 
-                document.Save(file);
+                document.Save(projectFile);
             }
+        }
 
+        private static void PrintPackagePropertiesToCopy(IEnumerable<Package> packages)
+        {
             Console.WriteLine("Copy the following to PackageVersions.props:");
             Console.WriteLine();
 
-            var packageVersionProperties = uniquePackages.Select(p => $"<{GetPackageVersionProperty(p.Id)}>{p.Version}</{GetPackageVersionProperty(p.Id)}>").ToList();
+            var packagesToAdd = packages.Where(p => p.Version != p.MSBuildReferencedPackageVersionProperty)
+                                        .OrderBy(p => p, new PackageComparer())
+                                        .ToList();
 
-            foreach (string packageVersionProperty in packageVersionProperties)
+            foreach (var packageToAdd in packagesToAdd)
             {
-                Console.WriteLine(packageVersionProperty);
+                Console.WriteLine(string.Format("<{0}>{1}</{0}>", packageToAdd.Id, packageToAdd.Version));
             }
-
-            Console.WriteLine("Completed.");
-
-            Console.Read();
         }
 
-        private static string GetPackageVersionProperty(string packageId) => "PackageVersion_" + packageId.Replace(".", "_");
+        private static List<string> GetAllMSBuildPackageVersionProperties(string packagePropsFile)
+        {
+            XNamespace MSBuildNamespace = "http://schemas.microsoft.com/developer/msbuild/2003";
 
-        private static string GetReferencedPackageVersionProperty(string packageId) => $"$({GetPackageVersionProperty(packageId)})";
+            return new List<string>();
+        }
 
         private class Package
         {
-            public string Id { get; set; }
+            public Package(string id, string version)
+            {
+                Id = id ?? throw new ArgumentNullException(nameof(id));
+                Version = version ?? throw new ArgumentNullException(nameof(version));
+            }
 
-            public string Version { get; set; }
+            public string Id { get; }
+
+            public string Version { get; }
+
+            public string MSBuildPackageVersionProperty => "PackageVersion_" + Id.Replace(".", "_");
+
+            public string MSBuildReferencedPackageVersionProperty => $"$({MSBuildPackageVersionProperty})";
         }
 
         private class PackageComparer : IComparer<Package>, IEqualityComparer<Package>
