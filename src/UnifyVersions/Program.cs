@@ -22,9 +22,9 @@ namespace UnifyVersions
                 Console.WriteLine("Root directory doesn't exist");
             }
 
-            string pkgPropsFile = args[1];
-            if (!File.Exists(pkgPropsFile) ||
-                !StringComparer.OrdinalIgnoreCase.Equals("PackageVersions.props", Path.GetFileName(pkgPropsFile)))
+            string packageVersionPropsFile = args[1];
+            if (!File.Exists(packageVersionPropsFile) ||
+                !StringComparer.OrdinalIgnoreCase.Equals("PackageVersions.props", Path.GetFileName(packageVersionPropsFile)))
             {
                 Console.WriteLine("PackageVersions.props is not found.");
             }
@@ -35,7 +35,9 @@ namespace UnifyVersions
 
             RewriteProjectFiles(projectFiles);
 
-            PrintPackagePropertiesToCopy(packages);
+            PrintPackagePropertiesToAdd(packages);
+
+            PrintPackagePropertiesToRemove(packageVersionPropsFile, packages);
 
             Console.WriteLine("Completed.");
 
@@ -104,7 +106,7 @@ namespace UnifyVersions
             }
         }
 
-        private static void PrintPackagePropertiesToCopy(IEnumerable<Package> packages)
+        private static void PrintPackagePropertiesToAdd(IEnumerable<Package> packages)
         {
             Console.WriteLine("Copy the following to PackageVersions.props:");
             Console.WriteLine();
@@ -119,11 +121,28 @@ namespace UnifyVersions
             }
         }
 
-        private static List<string> GetAllMSBuildPackageVersionProperties(string packagePropsFile)
+        private static void PrintPackagePropertiesToRemove(string packagePropsFile, IEnumerable<Package> packages)
         {
+            Console.WriteLine("Remove the following from PackageVersions.props:");
+            Console.WriteLine();
+
             XNamespace MSBuildNamespace = "http://schemas.microsoft.com/developer/msbuild/2003";
 
-            return new List<string>();
+            var document = XDocument.Parse(File.ReadAllText(packagePropsFile));
+
+            var packageVersions = document.Root.Elements(MSBuildNamespace + "PropertyGroup")
+                                               .SelectMany(p => p.Elements())
+                                               .Where(p => p.Name.LocalName.StartsWith("PackageVersion_"))
+                                               .Select(p => p.Name.LocalName)
+                                               .ToList();
+
+            foreach (string packageVersion in packageVersions)
+            {
+                if (!packages.Any(p => p.MSBuildPackageVersionProperty == packageVersion))
+                {
+                    Console.WriteLine(packageVersion);
+                }
+            }
         }
 
         private class Package
