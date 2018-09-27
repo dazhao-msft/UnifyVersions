@@ -117,7 +117,7 @@ namespace UnifyVersions
 
             foreach (var packageToAdd in packagesToAdd)
             {
-                Console.WriteLine(string.Format("<{0}>{1}</{0}>", packageToAdd.Id, packageToAdd.Version));
+                Console.WriteLine(string.Format("<{0}>{1}</{0}>", packageToAdd.MSBuildPackageVersionProperty, packageToAdd.Version));
             }
         }
 
