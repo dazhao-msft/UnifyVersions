@@ -10,6 +10,8 @@ namespace UnifyVersions
     {
         public static void Main(string[] args)
         {
+            Console.WriteLine();
+
             if (args == null || args.Length != 2)
             {
                 Console.WriteLine("Expected arguments: {path to root directory} {path to PackageVersions.props");
@@ -46,6 +48,12 @@ namespace UnifyVersions
             PrintPackagePropertiesToAdd(packages);
 
             PrintPackagePropertiesToRemove(packageVersionPropsFile, packages);
+
+            //
+            // Analyze and print the TFM and RID to update.
+            //
+
+            PrintTfmAndRidToUpdate(projectFiles);
 
             //
             // Rewrite project files to remove explicit package versions.
@@ -93,7 +101,7 @@ namespace UnifyVersions
 
         private static void PrintPackagePropertiesToAdd(IEnumerable<Package> packages)
         {
-            Console.WriteLine("Copy the following to PackageVersions.props:");
+            Console.WriteLine("Add the following to PackageVersions.props:");
             Console.WriteLine();
 
             var packagesToAdd = packages.Where(p => p.Version != p.MSBuildReferencedPackageVersionProperty)
@@ -126,6 +134,47 @@ namespace UnifyVersions
                 if (!packages.Any(p => p.MSBuildPackageVersionProperty == packageVersion))
                 {
                     Console.WriteLine(packageVersion);
+                }
+            }
+        }
+
+        private static void PrintTfmAndRidToUpdate(IEnumerable<string> projectFiles)
+        {
+            Console.WriteLine("Update the following Tfm and Rid in the projects:");
+            Console.WriteLine();
+
+            foreach (string projectFile in projectFiles)
+            {
+                var document = XDocument.Parse(File.ReadAllText(projectFile));
+
+                //
+                // TargetFramework
+                //
+
+                var tfmElements = document.Root.Elements("PropertyGroup")
+                                               .SelectMany(p => p.Elements())
+                                               .Where(p => StringComparer.OrdinalIgnoreCase.Equals("TargetFramework", p.Name.LocalName))
+                                               .Where(p => string.IsNullOrEmpty(p.Value) || !p.Value.StartsWith("$("))
+                                               .ToList();
+
+                foreach (var tfmElement in tfmElements)
+                {
+                    Console.WriteLine($"{tfmElement.ToString()} in {projectFile}");
+                }
+
+                //
+                // RuntimeIdentifier
+                //
+
+                var ridElements = document.Root.Elements("PropertyGroup")
+                                               .SelectMany(p => p.Elements())
+                                               .Where(p => StringComparer.OrdinalIgnoreCase.Equals("RuntimeIdentifier", p.Name.LocalName))
+                                               .Where(p => string.IsNullOrEmpty(p.Value) || !p.Value.StartsWith("$("))
+                                               .ToList();
+
+                foreach (var ridElement in ridElements)
+                {
+                    Console.WriteLine($"{ridElement.ToString()} in {projectFile}");
                 }
             }
         }
