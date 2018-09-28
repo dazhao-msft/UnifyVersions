@@ -8,6 +8,8 @@ namespace UnifyVersions
 {
     public static class Program
     {
+        private static readonly XNamespace MSBuildNamespace = "http://schemas.microsoft.com/developer/msbuild/2003";
+
         public static void Main(string[] args)
         {
             Console.WriteLine();
@@ -45,9 +47,9 @@ namespace UnifyVersions
             // Analyze and print the gaps between project files and PackageVersions.props.
             //
 
-            PrintPackagePropertiesToAdd(packages);
+            PrintPackageVersionsPropertiesToAdd(packages);
 
-            PrintPackagePropertiesToRemove(packageVersionPropsFile, packages);
+            PrintPackageVersionsPropertiesToRemove(packageVersionPropsFile, packages);
 
             //
             // Analyze and print the TFM and RID to update.
@@ -60,6 +62,12 @@ namespace UnifyVersions
             //
 
             RewriteProjectFiles(projectFiles);
+
+            //
+            // Format PackageVersions.props.
+            //
+
+            FormatPackageVersionsPropsFile(packageVersionPropsFile);
 
             //
             // Done.
@@ -99,7 +107,7 @@ namespace UnifyVersions
             return packages;
         }
 
-        private static void PrintPackagePropertiesToAdd(IEnumerable<Package> packages)
+        private static void PrintPackageVersionsPropertiesToAdd(IEnumerable<Package> packages)
         {
             Console.WriteLine("Add the following to PackageVersions.props:");
             Console.WriteLine();
@@ -114,14 +122,12 @@ namespace UnifyVersions
             }
         }
 
-        private static void PrintPackagePropertiesToRemove(string packagePropsFile, IEnumerable<Package> packages)
+        private static void PrintPackageVersionsPropertiesToRemove(string packageVersionsPropsFile, IEnumerable<Package> packages)
         {
             Console.WriteLine("Remove the following from PackageVersions.props:");
             Console.WriteLine();
 
-            XNamespace MSBuildNamespace = "http://schemas.microsoft.com/developer/msbuild/2003";
-
-            var document = XDocument.Parse(File.ReadAllText(packagePropsFile));
+            var document = XDocument.Parse(File.ReadAllText(packageVersionsPropsFile));
 
             var packageVersions = document.Root.Elements(MSBuildNamespace + "PropertyGroup")
                                                .SelectMany(p => p.Elements())
@@ -181,6 +187,8 @@ namespace UnifyVersions
 
         private static void RewriteProjectFiles(IEnumerable<string> projectFiles)
         {
+            Console.WriteLine("Rewriting project files...");
+
             foreach (string projectFile in projectFiles)
             {
                 var document = XDocument.Parse(File.ReadAllText(projectFile));
@@ -208,6 +216,39 @@ namespace UnifyVersions
 
                 document.Save(projectFile);
             }
+
+            Console.WriteLine("Rewriting project files completed.");
+            Console.WriteLine();
+        }
+
+        private static void FormatPackageVersionsPropsFile(string packageVersionsPropsFile)
+        {
+            Console.WriteLine("Formatting PackageVersions.props...");
+
+            var document = XDocument.Parse(File.ReadAllText(packageVersionsPropsFile));
+
+            //
+            // Assume PackageVersions.props only has one <PropertyGroup/> element.
+            //
+
+            var propertyGroupElements = document.Root.Elements(MSBuildNamespace + "PropertyGroup").ToList();
+
+            if (propertyGroupElements.Count != 1)
+            {
+                Console.WriteLine("Error: there must be only one <PropertyGroup/> element.");
+                return;
+            }
+
+            var propertyGroupElement = propertyGroupElements.Single();
+
+            var childrenElements = propertyGroupElement.Elements().OrderBy(p => p.Name.ToString()).ToList();
+
+            propertyGroupElement.ReplaceAll(childrenElements);
+
+            document.Save(packageVersionsPropsFile);
+
+            Console.WriteLine("Formatting PackageVersions.props completed.");
+            Console.WriteLine();
         }
 
         private class Package
