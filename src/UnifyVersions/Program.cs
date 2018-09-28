@@ -20,6 +20,7 @@ namespace UnifyVersions
             if (!Directory.Exists(rootDirectory))
             {
                 Console.WriteLine("Root directory doesn't exist");
+                return;
             }
 
             string packageVersionPropsFile = args[1];
@@ -27,21 +28,36 @@ namespace UnifyVersions
                 !StringComparer.OrdinalIgnoreCase.Equals("PackageVersions.props", Path.GetFileName(packageVersionPropsFile)))
             {
                 Console.WriteLine("PackageVersions.props is not found.");
+                return;
             }
+
+            //
+            // Find all the csproj files as well as all the NuGet packages referenced by the projects.
+            //
 
             string[] projectFiles = Directory.GetFiles(rootDirectory, "*.csproj", SearchOption.AllDirectories);
 
             HashSet<Package> packages = GetAllPackages(projectFiles);
 
-            RewriteProjectFiles(projectFiles);
+            //
+            // Analyze and print the gaps between project files and PackageVersions.props.
+            //
 
             PrintPackagePropertiesToAdd(packages);
 
             PrintPackagePropertiesToRemove(packageVersionPropsFile, packages);
 
-            Console.WriteLine("Completed.");
+            //
+            // Rewrite project files to remove explicit package versions.
+            //
 
-            Console.Read();
+            RewriteProjectFiles(projectFiles);
+
+            //
+            // Done.
+            //
+
+            Console.WriteLine("Completed.");
         }
 
         private static HashSet<Package> GetAllPackages(IEnumerable<string> projectFiles)
@@ -73,37 +89,6 @@ namespace UnifyVersions
             }
 
             return packages;
-        }
-
-        private static void RewriteProjectFiles(IEnumerable<string> projectFiles)
-        {
-            foreach (string projectFile in projectFiles)
-            {
-                var document = XDocument.Parse(File.ReadAllText(projectFile));
-
-                var packageReferenceList = new List<XElement>();
-                packageReferenceList.AddRange(document.Root.Elements("ItemGroup").SelectMany(p => p.Elements("PackageReference")));
-                packageReferenceList.AddRange(document.Root.Elements("ItemGroup").SelectMany(p => p.Elements("DotNetCliToolReference")));
-
-                foreach (var packageReference in packageReferenceList)
-                {
-                    string include = packageReference.Attribute("Include")?.Value ?? packageReference.Attribute("include")?.Value;
-
-                    var attribute = packageReference.Attribute("Version") ?? packageReference.Attribute("version");
-
-                    if (string.IsNullOrEmpty(include) || string.IsNullOrEmpty(attribute?.Value))
-                    {
-                        Console.WriteLine($"Warning: invalid package reference: {packageReference.ToString()}");
-                        continue;
-                    }
-
-                    var package = new Package(include, /* version doesn't matter here */ string.Empty);
-
-                    attribute.Value = package.MSBuildReferencedPackageVersionProperty;
-                }
-
-                document.Save(projectFile);
-            }
         }
 
         private static void PrintPackagePropertiesToAdd(IEnumerable<Package> packages)
@@ -142,6 +127,37 @@ namespace UnifyVersions
                 {
                     Console.WriteLine(packageVersion);
                 }
+            }
+        }
+
+        private static void RewriteProjectFiles(IEnumerable<string> projectFiles)
+        {
+            foreach (string projectFile in projectFiles)
+            {
+                var document = XDocument.Parse(File.ReadAllText(projectFile));
+
+                var packageReferenceList = new List<XElement>();
+                packageReferenceList.AddRange(document.Root.Elements("ItemGroup").SelectMany(p => p.Elements("PackageReference")));
+                packageReferenceList.AddRange(document.Root.Elements("ItemGroup").SelectMany(p => p.Elements("DotNetCliToolReference")));
+
+                foreach (var packageReference in packageReferenceList)
+                {
+                    string include = packageReference.Attribute("Include")?.Value ?? packageReference.Attribute("include")?.Value;
+
+                    var attribute = packageReference.Attribute("Version") ?? packageReference.Attribute("version");
+
+                    if (string.IsNullOrEmpty(include) || string.IsNullOrEmpty(attribute?.Value))
+                    {
+                        Console.WriteLine($"Warning: invalid package reference: {packageReference.ToString()}");
+                        continue;
+                    }
+
+                    var package = new Package(include, /* version doesn't matter here */ string.Empty);
+
+                    attribute.Value = package.MSBuildReferencedPackageVersionProperty;
+                }
+
+                document.Save(projectFile);
             }
         }
 
