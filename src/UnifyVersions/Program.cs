@@ -227,23 +227,14 @@ namespace UnifyVersions
 
             var document = XDocument.Parse(File.ReadAllText(packageVersionsPropsFile));
 
-            //
-            // Assume PackageVersions.props only has one <PropertyGroup/> element.
-            //
-
             var propertyGroupElements = document.Root.Elements(MSBuildNamespace + "PropertyGroup").ToList();
 
-            if (propertyGroupElements.Count != 1)
+            foreach (var propertyGroupElement in propertyGroupElements)
             {
-                Console.WriteLine("Error: there must be only one <PropertyGroup/> element.");
-                return;
+                var sortedChildrenElements = propertyGroupElement.Elements().OrderBy(p => p.Name.ToString()).ToList();
+
+                propertyGroupElement.ReplaceAll(sortedChildrenElements);
             }
-
-            var propertyGroupElement = propertyGroupElements.Single();
-
-            var childrenElements = propertyGroupElement.Elements().OrderBy(p => p.Name.ToString()).ToList();
-
-            propertyGroupElement.ReplaceAll(childrenElements);
 
             document.Save(packageVersionsPropsFile);
 
