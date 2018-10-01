@@ -100,7 +100,19 @@ namespace UnifyVersions
                         continue;
                     }
 
-                    if (string.IsNullOrEmpty(version) && include != "Microsoft.AspNetCore.App")
+                    //
+                    // Deals with the special package Microsoft.AspNetCore.App.
+                    //
+                    if (string.Equals(include, "Microsoft.AspNetCore.App", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!string.IsNullOrEmpty(version))
+                        {
+                            Console.WriteLine($"Warning: The package Microsoft.AspNetCore.App should not have a version.");
+                        }
+                        continue;
+                    }
+
+                    if (string.IsNullOrEmpty(version))
                     {
                         Console.WriteLine($"Warning: invalid package reference: {packageReference.ToString()}");
                         continue;
@@ -215,7 +227,19 @@ namespace UnifyVersions
                         continue;
                     }
 
-                    if (string.IsNullOrEmpty(attribute?.Value) && include != "Microsoft.AspNetCore.App")
+                    //
+                    // Deals with the special package Microsoft.AspNetCore.App.
+                    //
+                    if (string.Equals(include, "Microsoft.AspNetCore.App", StringComparison.OrdinalIgnoreCase))
+                    {
+                        if (!string.IsNullOrEmpty(attribute?.Value))
+                        {
+                            Console.WriteLine($"Warning: The package Microsoft.AspNetCore.App should not have a version.");
+                        }
+                        continue;
+                    }
+
+                    if (string.IsNullOrEmpty(attribute?.Value))
                     {
                         Console.WriteLine($"Warning: invalid package reference: {packageReference.ToString()}");
                         continue;
