@@ -94,7 +94,13 @@ namespace UnifyVersions
 
                     string version = packageReference.Attribute("Version")?.Value ?? packageReference.Attribute("version")?.Value;
 
-                    if (string.IsNullOrEmpty(include) || string.IsNullOrEmpty(version))
+                    if (string.IsNullOrEmpty(include))
+                    {
+                        Console.WriteLine($"Warning: invalid package reference: {packageReference.ToString()}");
+                        continue;
+                    }
+
+                    if (string.IsNullOrEmpty(version) && include != "Microsoft.AspNetCore.App")
                     {
                         Console.WriteLine($"Warning: invalid package reference: {packageReference.ToString()}");
                         continue;
@@ -203,7 +209,13 @@ namespace UnifyVersions
 
                     var attribute = packageReference.Attribute("Version") ?? packageReference.Attribute("version");
 
-                    if (string.IsNullOrEmpty(include) || string.IsNullOrEmpty(attribute?.Value))
+                    if (string.IsNullOrEmpty(include))
+                    {
+                        Console.WriteLine($"Warning: invalid package reference: {packageReference.ToString()}");
+                        continue;
+                    }
+
+                    if (string.IsNullOrEmpty(attribute?.Value) && include != "Microsoft.AspNetCore.App")
                     {
                         Console.WriteLine($"Warning: invalid package reference: {packageReference.ToString()}");
                         continue;
