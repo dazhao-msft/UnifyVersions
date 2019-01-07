@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Xml.Linq;
 
 namespace UnifyVersions
@@ -273,6 +274,9 @@ namespace UnifyVersions
             }
 
             document.Save(packageVersionsPropsFile);
+
+            // Workaround: Append a new line at the end to align with the team coding style.
+            File.AppendAllText(packageVersionsPropsFile, Environment.NewLine, Encoding.UTF8);
 
             Console.WriteLine("Formatting PackageVersions.props completed.");
             Console.WriteLine();
